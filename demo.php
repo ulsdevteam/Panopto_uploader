@@ -57,21 +57,20 @@ if ($session) {
 // Maybe https://docs.aws.amazon.com/sdk-for-php/v3/developer-guide/s3-multipart-upload.html , if the S3Client can be overridden (or configured to use a custom endpoint).
   $upload_id = $session['ID'];
   $UploadTarget =  $session['UploadTarget'];
-  $FILENAME = "earth.mp4";
+  $FILENAME = MP4_FILENAME;
 
-  // step 2 - upload the video file
-  multipart_upload_single_file($UploadTarget, $FILENAME);
-  //
-  // step 3 - create manifest file and uplaod it
+  // step 2 - create manifest file and uplaod it
   create_manifest_for_video($FILENAME, MANIFEST_FILE_NAME);
   multipart_upload_single_file($UploadTarget, MANIFEST_FILE_NAME);
+  // step 3 - upload the video file
+  multipart_upload_single_file($UploadTarget, $FILENAME);
   $uploadendpoint = 'https://pitt.hosted.panopto.com/Panopto/PublicAPI/Rest/sessionUpload';
   // step 4 - finish the upload
   finish_upload($uploadendpoint, $session, $token);
 
   // step 5 - monitor the progress of processing
-  monitor_progress($uploadendpoint, $upload_id, $token);
-  // $success = true;
+  $success = monitor_progress($uploadendpoint, $upload_id, $token);
+  echo "\n".'Success? '.$success."\n";
 }
 
 // if ($success) {
@@ -218,7 +217,7 @@ function finish_upload($baseUrl, $session_upload, $token) {
   $upload_target = $session_upload['UploadTarget'];
   echo "\n";
 
-  echo "Calling PUT PublicAPI/REST/sessionUpload/$upload_id endpoint\n";
+  echo "Calling GET PublicAPI/REST/sessionUpload/$upload_id endpoint\n";
   $url = $baseUrl."/".$upload_id;
   $payload = $session_upload;
   $payload['State'] = 1;
@@ -236,6 +235,7 @@ function finish_upload($baseUrl, $session_upload, $token) {
 /**
 * Polling status API until process completes.
 * @param $upload_id
+* @return boolean success
 */
 function monitor_progress($baseUrl, $upload_id, $token) {
   echo "\n";
@@ -246,30 +246,23 @@ function monitor_progress($baseUrl, $upload_id, $token) {
       $headers = array("Authorization: Bearer {$token}", "Content-Type: application/json");
       $resp = request_curl($url, $headers);
       echo "=======Response======\n";
-      if (inspect_response_is_retry_needed($resp)){
+      $response = json_decode($resp, true);
+      print_r($response);
+      if ($response['State'] === 0) {
+          echo "...Retrying\n";
           # If we get Unauthorized and token is refreshed, ignore the response at this time and wait for next time.
-          print_r($resp);
-          $a = json_encode($resp);
-          echo("ewqeq: ".$a['State']);
           continue;
       }
-      echo("\n\n  State: ".$resp['State']);
-
-      if ($session_upload['State'] == 4) { # Complete
-        break;
-      } else if ($session_upload['State'] == 5) {
-        echo "There was an error during transfer.";
-        break;
-      }
+    break;
   }
-}
-
-function inspect_response_is_retry_needed($response) {
-  // if ($response['status_code'] >= 200 && $response['status_code'] < 300) { // 100 == 2:
-  //   # Success on 2xx response.
-  //   return false;
-  // }
-  return true;
+  switch ($response['State']) {
+    case 1:
+    case 3:
+    case 4:
+      return true;
+    default:
+      return false;
+  }
 }
 
 
