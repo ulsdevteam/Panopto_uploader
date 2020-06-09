@@ -8,6 +8,8 @@ use Aws\S3\ObjectUploader;
 use Aws\S3\MultipartUploader;
 use Aws\Exception\MultipartUploadException;
 
+const MANIFEST_FILE_NAME = 'ucs.xml';
+
 /*
 // This fails with "HTTP Error 411. The request must be chunked or have a content length.", so is unlikely to be salvagable
 try {
@@ -217,7 +219,7 @@ function finish_upload($baseUrl, $session_upload, $token) {
   $upload_target = $session_upload['UploadTarget'];
   echo "\n";
 
-  echo "Calling GET PublicAPI/REST/sessionUpload/$upload_id endpoint\n";
+  echo "Calling PUT $baseUrl/$upload_id endpoint\n";
   $url = $baseUrl."/".$upload_id;
   $payload = $session_upload;
   $payload['State'] = 1;
@@ -225,7 +227,7 @@ function finish_upload($baseUrl, $session_upload, $token) {
   echo "token: $token\n";
   echo "url: $url\n";
   echo "payload: ".json_encode($payload)."\n";
-  echo "headers: $headers\n";
+  echo "headers: ".var_export($headers, true)."\n";
 
   $resp = request_curl($url, $headers, json_encode($payload), 'PUT');
   echo "Response for finished upload: \n".json_encode($resp)."\n";
