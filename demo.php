@@ -227,7 +227,7 @@ function create_manifest_for_video($file_path = null, $manifest_file_name=null) 
     $template = str_replace("{Title}", $file_name, $template);
     $template = str_replace("{Description}", 'This is a video session with the uploaded video file '.$file_name, $template);
     $template = str_replace("{Filename}", $file_path, $template);
-    $template = str_replace("{Date}", date('Y-m-d H:i:s'), $template);
+    $template = str_replace("{Date}", date('c'), $template);
     error_log('Finished generated .xml file');
     file_put_contents($manifest_file_name, $template);
 }
