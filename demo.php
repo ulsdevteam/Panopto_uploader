@@ -50,7 +50,7 @@ if ($token) {
                 $session = $response;
         }
 }
-print_r($session); print "\n";  //exit;
+error_log($session);  //exit;
 
 $success = false;
 if ($session) {
@@ -72,7 +72,7 @@ if ($session) {
 
   // step 5 - monitor the progress of processing
   $success = monitor_progress($uploadendpoint, $upload_id, $token);
-  echo "\n".'Success? '.$success."\n";
+  error_log('Success? '.$success);
 }
 
 // if ($success) {
@@ -123,21 +123,23 @@ function multipart_upload_single_file($UploadTarget, $file_path) {
   $service_endpoint = implode("/", $element);
   $bucket = array_pop($element);
   $object_key = $prefix."/".$file_path;
-  echo "service_endpoint: ".$service_endpoint."\n";
-  echo "prefix: ".$prefix."\n";
-  echo "bucket: ".$bucket."\n";
-  echo "object_key: ".$object_key."\n";
+  error_log("service_endpoint: ".$service_endpoint);
+  error_log("prefix: ".$prefix);
+  error_log("bucket: ".$bucket);
+  error_log("object_key: ".$object_key);
 
-  // Create an S3Client
-  $s3Client = new S3Client([
+  $s3Params = array(
       'endpoint' => $service_endpoint,
       'region'  => 'us-east-1',
       'version' => '2006-03-01',
       'credentials' => [
         'key'    => 'dummy',
         'secret' => 'dummy'
-    ]
-  ]);
+      ]
+  );
+
+  // Create an S3Client
+  $s3Client = new S3Client($s3Params);
 
   // Use multipart upload
   $source = fopen($file_path, 'rb');//$file_path;//'earth.mp4';//'/path/to/large/file.zip';
@@ -148,19 +150,42 @@ function multipart_upload_single_file($UploadTarget, $file_path) {
     $source
   );
 
+print "\n".'--- S3: Aws\\S3\\ObjectUploader ---'."\n";
+print '--- REQUEST ---'."\n";
+//print var_export(array('endpoint' => $service_endpoint, 'bucket' => $bucket, 'key' => $object_key, 'body' => mime_content_type($file_path).' '.filesize($file_path).' bytes'), true)."\n";
+print '$uploader = new Aws\\S3\\ObjectUploader(
+  new Aws\\S3\S3Client( '.var_export($s3Params, true).'),
+  \''.$bucket.'\',
+  \''.$object_key.'\',
+  (*file) '.mime_content_type($file_path).' '.filesize($file_path).' bytes,
+)';
+
   do {
       try {
           $result = $uploader->upload();
+print "\n".'--- S3: upload() ---'."\n";
+print '--- RESPONSE ---'."\n";
+print var_export($result, true)."\n";
           if ($result["@metadata"]["statusCode"] == '200') {
-              print('<p>File successfully uploaded to ' . $result["ObjectURL"] . '.</p>');
-              echo "\n\n\n\n".$result['ObjectURL'];
+              error_log('<p>File successfully uploaded to ' . $result["ObjectURL"] . '.</p>');
+              error_log($result['ObjectURL']);
           }
-          print($result["@metadata"]["statusCode"]);
+          error_log($result["@metadata"]["statusCode"]);
       } catch (MultipartUploadException $e) {
           rewind($source);
           $uploader = new MultipartUploader($s3Client, $source, [
               'state' => $e->getState(),
           ]);
+print "\n".'--- S3: Aws\\S3\\MultipartUploader ---'."\n";
+print '--- REQUEST ---'."\n";
+//print var_export(array('endpoint' => $service_endpoint, 'state' => $e->getState(), 'body' => mime_content_type($file_path).' '.filesize($file_path).' bytes'), true)."\n";
+print '$uploader = new Aws\\S3\\MultipartUploader(
+  new Aws\\S3\S3Client( '.var_export($s3Params, true).'),
+  (*file) '.mime_content_type($file_path).' '.filesize($file_path).' bytes,
+  array(\'state\' => \''.$e->getState().'\',
+)';
+
+
       }
   } while (!isset($result));
 
@@ -196,15 +221,14 @@ function multipart_upload_single_file($UploadTarget, $file_path) {
 function create_manifest_for_video($file_path = null, $manifest_file_name=null) {
     $file_name = basename($file_path);
 
-    echo('\n');
-    echo('Writing manifest file: '.$manifest_file_name);
+    error_log('Writing manifest file: '.$manifest_file_name);
 
     $template = file_get_contents(MANIFEST_FILE_TEMPLATE);
     $template = str_replace("{Title}", $file_name, $template);
     $template = str_replace("{Description}", 'This is a video session with the uploaded video file '.$file_name, $template);
     $template = str_replace("{Filename}", $file_path, $template);
     $template = str_replace("{Date}", date('Y-m-d H:i:s'), $template);
-    echo 'Finished generated .xml file';
+    error_log('Finished generated .xml file');
     file_put_contents($manifest_file_name, $template);
 }
 
@@ -213,25 +237,24 @@ function create_manifest_for_video($file_path = null, $manifest_file_name=null) 
 * @param $session_upload
 */
 function finish_upload($baseUrl, $session_upload, $token) {
-  echo "========= Finish_upload ========\n";
-  echo json_encode($session_upload)."\n";
+  error_log("========= Finish_upload ========");
+  error_log(var_export(json_encode($session_upload), true));
   $upload_id = $session_upload['ID'];
   $upload_target = $session_upload['UploadTarget'];
-  echo "\n";
 
-  echo "Calling PUT $baseUrl/$upload_id endpoint\n";
+  error_log("Calling PUT $baseUrl/$upload_id endpoint");
   $url = $baseUrl."/".$upload_id;
   $payload = $session_upload;
   $payload['State'] = 1;
   $headers = array("Authorization: Bearer {$token}", "Content-Type: application/json");
-  echo "token: $token\n";
-  echo "url: $url\n";
-  echo "payload: ".json_encode($payload)."\n";
-  echo "headers: ".var_export($headers, true)."\n";
+  error_log( "token: $token");
+  error_log( "url: $url");
+  error_log( "payload: ".var_export(json_encode($payload), true));
+  error_log( "headers: ".var_export($headers, true));
 
   $resp = request_curl($url, $headers, json_encode($payload), 'PUT');
-  echo "Response for finished upload: \n".json_encode($resp)."\n";
-  echo "  done\n";
+  error_log("Response for finished upload: \n".var_export(json_encode($resp), true));
+  error_log("  done");
 }
 
 /**
@@ -240,18 +263,17 @@ function finish_upload($baseUrl, $session_upload, $token) {
 * @return boolean success
 */
 function monitor_progress($baseUrl, $upload_id, $token) {
-  echo "\n";
   while(1){
       sleep(5);
-      echo "Calling PUT PublicAPI/REST/sessionUpload/$upload_id endpoint";
+      error_log( "Calling PUT PublicAPI/REST/sessionUpload/$upload_id endpoint");
       $url = $baseUrl."/".$upload_id;
       $headers = array("Authorization: Bearer {$token}", "Content-Type: application/json");
       $resp = request_curl($url, $headers);
-      echo "=======Response======\n";
+      error_log( "=======Response======");
       $response = json_decode($resp, true);
-      print_r($response);
+      error_log(var_export($response, true));
       if ($response['State'] === 0) {
-          echo "...Retrying\n";
+          error_log( "...Retrying");
           # If we get Unauthorized and token is refreshed, ignore the response at this time and wait for next time.
           continue;
       }
@@ -304,6 +326,13 @@ function request_curl($endpoint, $headers, $content = '', $type = 'GET', $expect
   $response_code = curl_getinfo($cURL, CURLINFO_RESPONSE_CODE);
   $headerSent = curl_getinfo($cURL, CURLINFO_HEADER_OUT );
   error_log('Sent:'."\n".$headerSent."\n".$content."\n");
+  print "\n".'=== cURL: '.$type.' '.$endpoint." ===\n";
+  print '=== REQUEST ==='."\n";
+  print $headerSent;
+  print $content;
+  print "\n".'=== cURL: '.$type.' '.$endpoint." ===\n";
+  print '=== RESPONSE ==='."\n";
+  print $response;
   curl_close($cURL);
   if ($response === false) {
     error_log('curl for '.$endpoint.' failed: '.curl_error($cURL));
